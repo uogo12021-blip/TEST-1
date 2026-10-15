@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台股籌碼戰情室</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-6" x-data="stockApp()">
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 border-b border-slate-800 pb-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight text-emerald-400">台股籌碼戰情室</h1>
+                <p class="text-slate-400 text-sm mt-1">自動化每日盤後籌碼篩選與分析儀表板</p>
+            </div>
+            <div class="text-right text-xs text-slate-500">
+                資料更新時間：<span x-text="updateTime"></span>
+            </div>
+        </header>
+
+        <!-- 篩選條件面板 -->
+        <div class="bg-slate-800 p-5 rounded-xl shadow-lg mb-6 border border-slate-700">
+            <h2 class="text-lg font-semibold mb-4 text-slate-200">🔍 籌碼條件篩選</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">三大法人買賣超</label>
+                    <select x-model="filters.institutional" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200">
+                        <option value="all">不限</option>
+                        <option value="buy">三大法人同步買超</option>
+                        <option value="sell">三大法人同步賣超</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">外資連買天數</label>
+                    <select x-model="filters.foreignStreak" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200">
+                        <option value="0">不限</option>
+                        <option value="3">連續 3 天以上買超</option>
+                        <option value="5">連續 5 天以上買超</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">融資增減狀況</label>
+                    <select x-model="filters.margin" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200">
+                        <option value="all">不限</option>
+                        <option value="decrease">融資減少 (籌碼安定)</option>
+                        <option value="increase">融資增加</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">關鍵字搜尋 (代號/名稱)</label>
+                    <input type="text" x-model="filters.keyword" placeholder="例: 2330 或 台積電" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm text-slate-200">
+                </div>
+            </div>
+        </div>
+
+        <!-- 股票列表表格 -->
+        <div class="bg-slate-800 rounded-xl shadow-lg overflow-hidden border border-slate-700">
+            <div class="p-4 bg-slate-800/50 border-b border-slate-700 flex justify-between items-center">
+                <span class="text-sm font-medium text-slate-300">符合條件的股票清單 (共 <span x-text="filteredStocks.length"></span> 檔)</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-slate-900/60 text-slate-400 text-xs uppercase border-b border-slate-700">
+                            <th class="p-3">代號 / 名稱</th>
+                            <th class="p-3 text-right">收盤價</th>
+                            <th class="p-3 text-right">漲跌幅</th>
+                            <th class="p-3 text-right">外資買賣超 (張)</th>
+                            <th class="p-3 text-right">投信買賣超 (張)</th>
+                            <th class="p-3 text-right">自營商買賣超 (張)</th>
+                            <th class="p-3 text-right">融資增減 (張)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-700">
+                        <template x-for="stock in filteredStocks" :key="stock.id">
+                            <tr class="hover:bg-slate-700/40 transition">
+                                <td class="p-3 font-medium text-slate-100">
+                                    <span x-text="stock.id" class="text-emerald-400 font-mono mr-2"></span>
+                                    <span x-text="stock.name"></span>
+                                </td>
+                                <td class="p-3 text-right font-mono" x-text="stock.close"></td>
+                                <td class="p-3 text-right font-mono" :class="stock.change >= 0 ? 'text-red-400' : 'text-green-400'" x-text="(stock.change >= 0 ? '+' : '') + stock.change + '%'"></td>
+                                <td class="p-3 text-right font-mono" :class="stock.foreign >= 0 ? 'text-red-400' : 'text-green-400'" x-text="stock.foreign"></td>
+                                <td class="p-3 text-right font-mono" :class="stock.trust >= 0 ? 'text-red-400' : 'text-green-400'" x-text="stock.trust"></td>
+                                <td class="p-3 text-right font-mono" :class="stock.dealer >= 0 ? 'text-red-400' : 'text-green-400'" x-text="stock.dealer"></td>
+                                <td class="p-3 text-right font-mono text-slate-300" x-text="stock.margin"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function stockApp() {
+            return {
+                updateTime: '2026-10-15 18:30 (每日盤後更新)',
+                filters: {
+                    institutional: 'all',
+                    foreignStreak: '0',
+                    margin: 'all',
+                    keyword: ''
+                },
+                stocks: [
+                    { id: '2330', name: '台積電', close: 1050, change: 1.45, foreign: 2350, trust: 450, dealer: -120, margin: -150 },
+                    { id: '2317', name: '鴻海', close: 215, change: -0.92, foreign: -1200, trust: 80, dealer: 45, margin: 320 },
+                    { id: '2454', name: '聯發科', close: 1280, change: 2.40, foreign: 850, trust: 320, dealer: 90, margin: -40 },
+                    { id: '2603', name: '長榮', close: 195, change: 0.51, foreign: 420, trust: -30, dealer: 15, margin: 80 }
+                ],
+                get filteredStocks() {
+                    return this.stocks.filter(s => {
+                        // 關鍵字篩選
+                        if (this.filters.keyword && !s.id.includes(this.filters.keyword) && !s.name.includes(this.filters.keyword)) {
+                            return false;
+                        }
+                        // 三大法人篩選
+                        let totalInst = s.foreign + s.trust + s.dealer;
+                        if (this.filters.institutional === 'buy' && totalInst <= 0) return false;
+                        if (this.filters.institutional === 'sell' && totalInst >= 0) return false;
+                        // 融資篩選
+                        if (this.filters.margin === 'decrease' && s.margin > 0) return false;
+                        if (this.filters.margin === 'increase' && s.margin < 0) return false;
+                        return true;
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
